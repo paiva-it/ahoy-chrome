@@ -1,81 +1,36 @@
-$(document).ready( function() {
-
-    $('.ahoy-version').text("v" + chrome.app.getDetails().version);
-
-    $('#verSites').click( function() {
-        var newURL = "https://sitesbloqueados.pt/?utm_source=ahoy&utm_medium=chrome-popup&utm_campaign=Ahoy%20Chrome";
-        chrome.tabs.create({ url: newURL });
-    }); 
-
-    chrome.storage.local.get( [ "proxy_addr" ], function( result) { 
-        console.log(result);
-        $("#proxyaddr").text( result.proxy_addr );    
-    } )
-
-    $(".inquerito").click( function() {
-        chrome.tabs.create({ url: "https://donativos.ahoy.pro/?utm_source=ahoy&utm_medium=chrome-popup&utm_campaign=Ahoy%20Chrome" });
-    })
-
-    chrome.tabs.query( { active:true, currentWindow: true }, function(tabs) {
-        var currentTab = tabs[0];
-        
-        var activo = chrome.extension.getBackgroundPage().ahoy.is_url_in_list(currentTab.url);
-
-        if( activo ) {
-            $(".status.activo").show();
-            $(".status.inactivo").hide();
-        } else {
-            $(".status.activo").hide();
-            $(".status.inactivo").show();
-        }
-    })
-
-
-    $("#actualizarPagina").click( function() {
-        if($(this).attr('disabled')) { // HERE
-            return false;
-        };
-
-        chrome.extension.getBackgroundPage().ahoy.update_proxy( true );
-        chrome.extension.getBackgroundPage().ahoy.update_site_list();
-
-        $(this).attr('disabled', "");
-        
-        //Set the waiting height
-        $(".waiting").height( $(".info").height() );
-
-        // Hide
-        $(".info").hide();
-        $(".waiting").show();
-
-        setTimeout( function() {
-
-            $("#proxyaddr").text( chrome.extension.getBackgroundPage().ahoy.proxy_addr ); 
-            $("#forcarProxy").attr('disabled', false);
-
-            $(".info").show();
-            $(".waiting").hide();
-
-            // Refresh the page
-            chrome.tabs.reload();
-
-            window.close();
-          
-        }, 2000 );
-
-    });
-
-    $("#desactivarAhoy").click( function() {
-        chrome.extension.getBackgroundPage().ahoy.disable();
-        // Refresh the page
-        chrome.tabs.reload();
-        
-    });
-
-    $("#activarAhoy").click( function() {
-        chrome.extension.getBackgroundPage().ahoy.enable();
-        // Refresh the page
-        chrome.tabs.reload();
-   });
-
-});
+import {matches} from '../core.js';
+const $ = id=>document.getElementById(id);
+let state, tab;
+async function request(message) {
+  const result = await chrome.runtime.sendMessage(message);
+  if (!result?.ok) throw new Error(result?.error || 'Ahoy is unavailable. Reload the extension.');
+  return result;
+}
+function render() {
+  const s = state.settings;
+  const active = s.enabled && state.control === 'controlled_by_this_extension';
+  $('status').textContent = s.enabled ? active ? 'On · selected sites' : 'Proxy conflict' : 'Switched off';
+  $('dot').classList.toggle('on',active);
+  $('count').textContent = s.sites.length + (s.sites.length === 1 ? ' site' : ' sites');
+  $('toggle').textContent = s.enabled ? 'Turn off' : 'Turn on';
+  $('toggle').disabled = !s.enabled && !s.sites.length;
+  if (tab?.url && /^https?:/.test(tab.url)) {
+    const host = new URL(tab.url).hostname;
+    const included = matches(host,s.sites);
+    $('host').textContent = host;
+    $('route').textContent = included ? active ? 'Uses your configured proxy.' : 'On your list. Ahoy is currently off or unavailable.' : 'Uses your normal connection.';
+    $('add').textContent = included ? 'Already on your list' : 'Add this site';
+    $('add').disabled = included;
+  }
+  if (state.lastError && s.enabled) show(state.lastError,true);
+}
+function show(text,error=false) {$('message').textContent=text;$('message').classList.toggle('error',error);}
+async function run(message, success) {
+  try {show('');state=await request(message);render();if(!state.lastError)show(success);}
+  catch(error){show(error.message,true);}
+}
+$('options').onclick=()=>chrome.runtime.openOptionsPage();
+$('toggle').onclick=()=>run({type:'toggle',enabled:!state.settings.enabled},'Saved. Reload the website to use the new connection.');
+$('add').onclick=()=>run({type:'addSite',url:tab.url},'Added. Subdomains are included too.');
+try {[tab]=await chrome.tabs.query({active:true,currentWindow:true});state=await request({type:'status'});render();}
+catch(error){show(error.message,true);}

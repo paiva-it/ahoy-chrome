@@ -1,36 +1,6 @@
-<html>
-	<head>
-	    <meta charset="UTF-8">
-		<link rel="stylesheet" type="text/css" href="style.css" media="screen">
-	</head>
-
-	<body>
-		<script src="jquery-1.11.3.min.js"></script>
-		<script src="popup.js"></script>
-		<div id="ahoy-mainscreen">
-			<header>
-				<h1>Ahoy!</h1>
-			</header>
-			<div class="inquerito">
-				O Ahoy! precisa da tua ajuda! Clica aqui para saber mais.
-			</div>
-			<div class="info">A utilizar <span id="proxyaddr">xxx.xxx.xxx.xxx</span>
-				<div class="status activo">site desbloqueado</div>
-				<div class="status inactivo" style="display:none;">este site não está bloqueado</div>
-			</div>
-			<div class="waiting" ><img src="wait.gif"></img></div>
-			<div class="buttons">
-				<button id="actualizarPagina">Actualizar Página</button>
-				<button id="verSites">Ver Lista de Sites</button>
-				<button class="red" id="desactivarAhoy">Desactivar Ahoy!</button>
-
-				<input type="hidden" autofocus />
-			</div>
-
-			<footer>
-				<div>Feito com <span style="color: #ff0000">♥</span> em Portugal <span class="ahoy-version">v1.0</span></div>
-				<div><a href="https://revolucaodosbytes.pt" target="_blank">#RevoluçãoDosBytes</a></div>
-			</footer>
-		</div>
-	</body>
-</html>
+<!doctype html><html lang="en"><head><meta charset="UTF-8"><title>Ahoy! Personal</title><link rel="stylesheet" href="style.css"><script type="module" src="popup.js"></script></head>
+<body class="popup"><header><img src="../icons/color/48x48.png" alt=""><div><h1>Ahoy!</h1><div class="eyebrow">Your personal connection</div></div></header>
+<div class="top"><div class="status"><span id="dot" class="dot"></span><span id="status">Loading…</span></div><span id="count" class="chip">0 sites</span></div>
+<div class="card"><div class="eyebrow">Current website</div><p class="host" id="host">—</p><p class="muted" id="route">Open a website to add it.</p><button id="add" class="wide" disabled>Add this site</button></div>
+<button id="toggle" class="primary wide" disabled>Turn on</button><button id="options" class="wide">Sites & connection settings</button>
+<p id="message" role="status" class="message"></p><div class="foot">Only sites on your list use the proxy. No Ahoy account. No browsing telemetry.</div></body></html>

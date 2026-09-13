@@ -1,0 +1,17 @@
+{
+  "name": "ahoy-personal",
+  "version": "4.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node helper/proxy.mjs",
+    "test": "node --test tests/*.test.mjs",
+    "test:browser": "node tests/browser.mjs"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "devDependencies": {
+    "playwright": "^1.63.0"
+  }
+}

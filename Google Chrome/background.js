@@ -1,50 +1,80 @@
-/**
- * auxiliar functions
- */
-function sleep(milliseconds) {
-  var start = new Date().getTime();
-  for (var i = 0; i < 1e7; i++) {
-    if ((new Date().getTime() - start) > milliseconds){
-      break;
+import {DEFAULTS, validateSettings, makePac, normalizeDomain} from './core.js';
+let queue = Promise.resolve();
+function serial(task) {
+  const result = queue.then(task);
+  queue = result.catch(()=>{});
+  return result;
+}
+async function settings() {
+  const data = await chrome.storage.local.get('settings');
+  return validateSettings({...DEFAULTS, ...data.settings});
+}
+async function badge(s, conflict = false) {
+  await chrome.action.setBadgeText({text: conflict ? '!' : s.enabled ? 'ON' : ''});
+  await chrome.action.setBadgeBackgroundColor({color:conflict ? '#a32929' : '#176b55'});
+  await chrome.action.setIcon({path:{'38':`icons/${s.enabled && !conflict ? 'color' : 'gray'}/38x38.png`}});
+}
+async function apply(s) {
+  const state = await chrome.proxy.settings.get({incognito:false});
+  if (s.enabled) {
+    if (!s.sites.length) throw new Error('Add at least one site before turning Ahoy on.');
+    if (!['controllable_by_this_extension','controlled_by_this_extension'].includes(state.levelOfControl)) throw new Error('Another extension or browser policy controls your proxy. Disable it before enabling Ahoy.');
+    await chrome.proxy.settings.set({value:{mode:'pac_script',pacScript:{data:makePac(s), mandatory:true}},scope:'regular'});
+  } else {
+    await chrome.proxy.settings.clear({scope:'regular'});
+  }
+  await badge(s);
+}
+async function save(input) {
+  const next = validateSettings(input);
+  const previous = await settings();
+  await apply(next);
+  try {
+    await chrome.storage.local.set({settings:next, lastError:null});
+  } catch (error) {
+    await apply(previous);
+    throw error;
+  }
+  return next;
+}
+async function status() {
+  const s = await settings();
+  const proxy = await chrome.proxy.settings.get({incognito:false});
+  const {lastError} = await chrome.storage.local.get('lastError');
+  return {settings:s, control:proxy.levelOfControl, lastError};
+}
+async function handle(message) {
+  switch(message.type) {
+    case 'status': return status();
+    case 'save': await save(message.settings); return status();
+    case 'toggle': await save({...await settings(), enabled:message.enabled}); return status();
+    case 'addSite': {
+      const s = await settings();
+      s.sites.push(normalizeDomain(message.url));
+      await save(s);
+      return status();
     }
+    default: throw new Error('Unknown request.');
   }
 }
-
-function parseVersionString (str) {
-    if (typeof(str) != 'string') { return false; }
-    var x = str.split('.');
-    // parse from string or default to 0 if can't parse
-    var maj = parseInt(x[0]) || 0;
-    var min = parseInt(x[1]) || 0;
-    var pat = parseInt(x[2]) || 0;
-    return {
-        major: maj,
-        minor: min,
-        patch: pat
-    }
-}
-
-// Initialize the ahoy
-var ahoy = new Ahoy();
-
-/**
- * Alarms - Periodic Tasks
- * Updating the Local Storage with the latest info
- */
-
-// Create the periodic alarm to fetch new sites
-chrome.alarms.create( 'update_sites_and_proxy', { delayInMinutes: 30, periodInMinutes: 30 } )
-
-// Handle the alarms
-
-chrome.alarms.onAlarm.addListener( function (alarm) {
-	if( alarm.name == 'update_sites_and_proxy' ) {
-		ahoy.update_site_list();
-		ahoy.update_proxy();
-	}
+chrome.runtime.onMessage.addListener((message, sender, reply)=>{
+  if (sender.id !== chrome.runtime.id) return;
+  serial(()=>handle(message)).then(data=>reply({ok:true,...data}),error=>reply({ok:false,error:error.message}));
+  return true;
 });
-
-
-function getPopup() {
-    return chrome.extension.getViews( { type: "popup" } )[0];
+async function restore() {
+  try { await apply(await settings()); }
+  catch (error) { await chrome.storage.local.set({lastError:error.message}); await badge(await settings(),true); }
 }
+chrome.runtime.onInstalled.addListener(()=>serial(restore));
+chrome.runtime.onStartup.addListener(()=>serial(restore));
+chrome.proxy.onProxyError.addListener(error=>serial(async()=>{
+  if ((await settings()).enabled) {
+    await chrome.storage.local.set({lastError:`Proxy connection failed (${error.error}). Start the helper or check your proxy settings, then retry.`});
+    await badge(await settings(),true);
+  }
+}));
+chrome.proxy.settings.onChange.addListener(()=>serial(async()=>{
+  const state = await status();
+  await badge(state.settings,state.settings.enabled && state.control !== 'controlled_by_this_extension');
+}));
